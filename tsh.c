@@ -169,11 +169,19 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline) 
 {
+	char *argv[MAXARGS];	// command 저장
+	parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
+	builtin_cmd(argv);	// parsing된 명령어를 전달
+	
 	return;
 }
 
 int builtin_cmd(char **argv)
 {
+	char *cmd = argv[0];
+	if(!strcmp(cmd, "quit")){
+		exit(0);
+	}
 	return 0;
 }
 
