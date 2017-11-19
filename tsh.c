@@ -170,9 +170,16 @@ int main(int argc, char **argv)
 void eval(char *cmdline) 
 {
 	char *argv[MAXARGS];	// command 저장
+	pid_t pid;	//process ID;
 	parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
-	builtin_cmd(argv);	// parsing된 명령어를 전달
-	
+	if(!builtin_cmd(argv)){
+		if((pid = fork()) == 0){
+			if((execve(argv[0], argv,environ))<0){
+				printf("%s : Command not found\n",argv);
+				exit(0);
+			}
+		}
+	}
 	return;
 }
 
