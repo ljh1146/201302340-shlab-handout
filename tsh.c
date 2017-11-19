@@ -176,7 +176,7 @@ void eval(char *cmdline)
 		if((pid = fork()) == 0){
 			if((execve(argv[0], argv,environ))<0){
 				printf("%s : Command not found\n",argv);
-				exit(0);
+				builtin_cmd("quit");
 			}
 		}
 	}
@@ -186,7 +186,7 @@ void eval(char *cmdline)
 int builtin_cmd(char **argv)
 {
 	char *cmd = argv[0];
-	if(!strcmp(cmd, "quit")){
+	if(!strcmp(cmd,"quit")){
 		exit(0);
 	}
 	return 0;
