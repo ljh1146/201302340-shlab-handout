@@ -169,15 +169,27 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline) 
 {
+	int bg;
 	char *argv[MAXARGS];	// command 저장
 	pid_t pid;	//process ID;
-	parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
+	bg = parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
+	struct job_t *job;
 	if(!builtin_cmd(argv)){
 		if((pid = fork()) == 0){
 			if((execve(argv[0], argv,environ))<0){
 				printf("%s : Command not found\n",argv);
 				builtin_cmd("quit");
 			}
+		}
+			else{
+				addjob(jobs,pid,bg ? BG:FG, cmdline);
+				if(!bg){
+					waitpid(pid,jobs->state,0);
+					deletejob(jobs,pid);
+				}
+				else{
+					printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
+				}
 		}
 	}
 	return;
@@ -188,6 +200,10 @@ int builtin_cmd(char **argv)
 	char *cmd = argv[0];
 	if(!strcmp(cmd,"quit")){
 		exit(0);
+	}
+	else if (strcmp(cmd, "jobs")== 0) {
+		listjobs(jobs, 1);
+		return 1;
 	}
 	return 0;
 }
