@@ -181,15 +181,16 @@ void eval(char *cmdline)
 				builtin_cmd("quit");
 			}
 		}
+		else{
+			addjob(jobs,pid,bg ? BG:FG, cmdline);
+			if(!bg){
+				waitpid(pid,jobs->state,0);
+				deletejob(jobs,pid);
+				
+			}
 			else{
-				addjob(jobs,pid,bg ? BG:FG, cmdline);
-				if(!bg){
-					waitpid(pid,jobs->state,0);
-					deletejob(jobs,pid);
-				}
-				else{
-					printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
-				}
+				printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
+			}
 		}
 	}
 	return;
@@ -226,6 +227,7 @@ void waitfg(pid_t pid, int output_fd)
  */
 void sigchld_handler(int sig) 
 {
+	
 	return;
 }
 
@@ -236,6 +238,19 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+	int i = 0;
+	struct job_t* victim= NULL;
+	for(i = 0;i<MAXJOBS;i++){
+		if(getjobjid(jobs,i)!=NULL&&getjobjid(jobs,i)->state==FG)
+			victim = getjobjid(jobs,i);
+	}
+
+	if(victim!=NULL)
+	{
+		kill(victim->pid,SIGINT);
+		printf("Job [%d] (%d) terminated by signal %d \n",victim->jid,victim->pid,sig);
+		deletejob(jobs,victim->pid);
+	}
 	return;
 }
 
