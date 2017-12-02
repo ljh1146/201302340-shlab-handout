@@ -174,8 +174,16 @@ void eval(char *cmdline)
 	pid_t pid;	//process ID;
 	bg = parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
 	struct job_t *job;
+	sigset_t mask;
 	if(!builtin_cmd(argv)){
+		sigemptyset(&mask);
+		sigaddset(&mask,SIGCHLD);
+		sigaddset(&mask,SIGINT);
+		sigaddset(&mask,SIGTSTP);
+		sigprocmask(SIG_BLOCK, &mask,NULL);
 		if((pid = fork()) == 0){
+			setpgid(0,0);
+	  	    sigprocmask(SIG_UNBLOCK, &mask,NULL);
 			if((execve(argv[0], argv,environ))<0){
 				printf("%s : Command not found\n",argv);
 				builtin_cmd("quit");
@@ -184,11 +192,11 @@ void eval(char *cmdline)
 		else{
 			addjob(jobs,pid,bg ? BG:FG, cmdline);
 			if(!bg){
-				waitpid(pid,jobs->state,0);
-				deletejob(jobs,pid);
-				
+				sigprocmask(SIG_UNBLOCK,&mask,NULL);
+				waitfg(pid,STDOUT_FILENO);
 			}
 			else{
+				sigprocmask(SIG_UNBLOCK,&mask,NULL);
 				printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
 			}
 		}
@@ -227,6 +235,27 @@ void waitfg(pid_t pid, int output_fd)
  */
 void sigchld_handler(int sig) 
 {
+	int pid=0;
+	int status=-1;
+	do{
+		pid=waitpid(-1,&status,WNOHANG|WUNTRACED);   
+				       
+	    if(pid>0)//first time
+	    {
+		    if(WIFEXITED(status)){
+				deletejob(jobs,pid);
+			}
+			else if(WIFSIGNALED(status)){
+				printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(status));
+				deletejob(jobs,pid);
+			}
+			else if(WIFSTOPPED(status)){
+					getjobpid(jobs, pid)->state=ST;
+					printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(status));
+				}
+		}        
+	}
+    while(pid>0);
 	
 	return;
 }
@@ -261,6 +290,12 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+	pid_t pid = fgpid(jobs);
+	if(!pid){
+	}
+	else{
+	    kill(-pid,sig);
+	}
 	return;
 }
 
