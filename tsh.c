@@ -193,7 +193,7 @@ void eval(char *cmdline)
 			addjob(jobs,pid,bg ? BG:FG, cmdline);
 			if(!bg){
 				sigprocmask(SIG_UNBLOCK,&mask,NULL);
-				waitfg(pid,STDOUT_FILENO);
+				waitfg(pid,1);
 			}
 			else{
 				sigprocmask(SIG_UNBLOCK,&mask,NULL);
@@ -277,8 +277,6 @@ void sigint_handler(int sig)
 	if(victim!=NULL)
 	{
 		kill(victim->pid,SIGINT);
-		printf("Job [%d] (%d) terminated by signal %d \n",victim->jid,victim->pid,sig);
-		deletejob(jobs,victim->pid);
 	}
 	return;
 }
