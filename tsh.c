@@ -173,32 +173,28 @@ void eval(char *cmdline)
 	char *argv[MAXARGS];	// command 저장
 	pid_t pid;	//process ID;
 	bg = parseline(cmdline, argv);	//명령어를 parseline을 통해 분리
-	struct job_t *job;
 	sigset_t mask;
 	if(!builtin_cmd(argv)){
 		sigemptyset(&mask);
-		sigaddset(&mask,SIGCHLD);
 		sigaddset(&mask,SIGINT);
 		sigaddset(&mask,SIGTSTP);
+		sigaddset(&mask,SIGCHLD);
 		sigprocmask(SIG_BLOCK, &mask,NULL);
+		setpgid(0,0);
 		if((pid = fork()) == 0){
-			setpgid(0,0);
-	  	    sigprocmask(SIG_UNBLOCK, &mask,NULL);
-			if((execve(argv[0], argv,environ))<0){
-				printf("%s : Command not found\n",argv);
-				builtin_cmd("quit");
+	  	    sigprocmask(SIG_UNBLOCK,&mask,NULL);
+			if(execve(argv[0], argv,environ)<0){
+		//		printf("%s : Command not found\n",argv[0]);
+				exit(0);
 			}
 		}
+		addjob(jobs,pid,bg+1,cmdline);
+		sigprocmask(SIG_UNBLOCK,&mask,NULL);
+		if(!bg){
+			waitfg(pid,1);
+		}
 		else{
-			addjob(jobs,pid,bg ? BG:FG, cmdline);
-			if(!bg){
-				sigprocmask(SIG_UNBLOCK,&mask,NULL);
-				waitfg(pid,1);
-			}
-			else{
-				sigprocmask(SIG_UNBLOCK,&mask,NULL);
-				printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
-			}
+			printf("(%d) (%d) %s",pid2jid(pid),pid,cmdline);
 		}
 	}
 	return;
@@ -214,11 +210,29 @@ int builtin_cmd(char **argv)
 		listjobs(jobs, 1);
 		return 1;
 	}
+	else if (!strcmp(cmd,"bg") || !strcmp(cmd,"fg")){
+		char *t = argv[1];
+		int jid = t[1]-'0';
+		struct job_t *j = getjobjid(jobs,jid);
+		pid_t pid = j->pid;
+		if(!strcmp(cmd,"bg")){
+			j->state = BG;
+			printf("[%d] (%d) %s",jid,pid,j->cmdline);
+			kill(pid,SIGCONT);
+		}else{
+			j->state = FG;
+			printf("[%d] (%d) %s",jid,pid,j->cmdline);
+			kill(pid,SIGCONT);
+		}
+	}
 	return 0;
 }
 
 void waitfg(pid_t pid, int output_fd)
 {
+	while(fgpid(jobs)==pid){
+		sleep(1);
+	}
 	return;
 }
 
@@ -235,28 +249,23 @@ void waitfg(pid_t pid, int output_fd)
  */
 void sigchld_handler(int sig) 
 {
-	int pid=0;
-	int status=-1;
-	do{
-		pid=waitpid(-1,&status,WNOHANG|WUNTRACED);   
-				       
-	    if(pid>0)//first time
-	    {
+	pid_t pid;
+	int status;
+	while((pid=waitpid(-1,&status,WNOHANG|WUNTRACED))>0){
 		    if(WIFEXITED(status)){
 				deletejob(jobs,pid);
 			}
-			else if(WIFSIGNALED(status)){
+			else
+			if(WIFSIGNALED(status)){
 				printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, WTERMSIG(status));
 				deletejob(jobs,pid);
 			}
 			else if(WIFSTOPPED(status)){
-					getjobpid(jobs, pid)->state=ST;
-					printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(status));
-				}
-		}        
+				struct job_t *j = getjobpid(jobs,pid);
+				j->state = ST;
+				printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(status));
+			}
 	}
-    while(pid>0);
-	
 	return;
 }
 
@@ -267,16 +276,11 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
-	int i = 0;
-	struct job_t* victim= NULL;
-	for(i = 0;i<MAXJOBS;i++){
-		if(getjobjid(jobs,i)!=NULL&&getjobjid(jobs,i)->state==FG)
-			victim = getjobjid(jobs,i);
+	pid_t pid = fgpid(jobs);
+	if(!pid){
 	}
-
-	if(victim!=NULL)
-	{
-		kill(victim->pid,SIGINT);
+	else{
+		kill(-pid,sig);
 	}
 	return;
 }
@@ -292,7 +296,7 @@ void sigtstp_handler(int sig)
 	if(!pid){
 	}
 	else{
-	    kill(-pid,sig);
+		kill(pid,sig);
 	}
 	return;
 }
