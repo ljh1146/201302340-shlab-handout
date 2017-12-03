@@ -180,11 +180,11 @@ void eval(char *cmdline)
 		sigaddset(&mask,SIGTSTP);
 		sigaddset(&mask,SIGCHLD);
 		sigprocmask(SIG_BLOCK, &mask,NULL);
-		setpgid(0,0);
 		if((pid = fork()) == 0){
+			setpgid(0,0);
 	  	    sigprocmask(SIG_UNBLOCK,&mask,NULL);
 			if(execve(argv[0], argv,environ)<0){
-		//		printf("%s : Command not found\n",argv[0]);
+				printf("%s : Command not found\n",argv[0]);
 				exit(0);
 			}
 		}
@@ -218,12 +218,12 @@ int builtin_cmd(char **argv)
 		if(!strcmp(cmd,"bg")){
 			j->state = BG;
 			printf("[%d] (%d) %s",jid,pid,j->cmdline);
-			kill(pid,SIGCONT);
+			kill(-pid,SIGCONT);
 		}else{
 			j->state = FG;
-			printf("[%d] (%d) %s",jid,pid,j->cmdline);
-			kill(pid,SIGCONT);
+			kill(-pid,SIGCONT);
 		}
+		return 1;
 	}
 	return 0;
 }
@@ -296,7 +296,7 @@ void sigtstp_handler(int sig)
 	if(!pid){
 	}
 	else{
-		kill(pid,sig);
+		kill(-pid,sig);
 	}
 	return;
 }
